@@ -72,7 +72,7 @@ stage('Install sgd-git-delta plugin') {
 
 		
 		stage('Download the difference') {
-		    rc = command "${toolbelt}sfdx sgd:source:delta --to development2 --from main --output ."
+		    rc = command "${toolbelt}sfdx sgd:source:delta --to Feature-1 --from main --output ."
 		//	rc = command "${toolbelt}/sfdx force:source:deploy -x ${DEPLOYDIR} --targetusername UAT"
 		    if (rc != 0) {
 			error 'Salesforce deploy and test run failed.'
