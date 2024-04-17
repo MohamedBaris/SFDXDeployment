@@ -23,13 +23,7 @@ node {
 
 }
 
-stage('Install sgd-git-delta plugin') {
-            steps {
-                script {
-                    bat 'echo y | sfdx plugins:install sfdx-git-delta'
-                }
-            }
-        }
+
 
 		
     stage('checkout source') {
@@ -50,6 +44,7 @@ stage('Install sgd-git-delta plugin') {
 		// -------------------------------------------------------------------------
 
 		stage('Authorize to Salesforce') {
+				rc = command "echo y | sfdx plugins:install sfdx-git-delta"
 			rc = command "echo %PATH%"
 			rc = command "${toolbelt}/sfdx auth:jwt:grant --instanceurl ${SF_INSTANCE_URL} --clientid ${SF_CONSUMER_KEY} --jwtkeyfile ${server_key_file} --username ${SF_USERNAME} --setalias UAT"
 		    if (rc != 0) {
@@ -63,7 +58,8 @@ stage('Install sgd-git-delta plugin') {
 		// -------------------------------------------------------------------------
 
 		stage('Download the Main') {
-		    rc = command "${toolbelt}/git checkout main Feature-1"
+			  rc = command "git checkout Feature1"
+		    rc = command "git checkout main"
 		//	rc = command "${toolbelt}/sfdx force:source:deploy -x ${DEPLOYDIR} --targetusername UAT"
 		    if (rc != 0) {
 			error 'Salesforce deploy and test run failed.'
@@ -72,7 +68,9 @@ stage('Install sgd-git-delta plugin') {
 
 		
 		stage('Download the difference') {
-		    rc = command "${toolbelt}sfdx sgd:source:delta --to Feature-1 --from main --output ."
+			rc = command "git fetch"
+			rc = command "git fetch --unshallow"
+		    rc = command "${toolbelt}/sfdx sgd:source:delta --to Feature1 --from main --output ."
 		//	rc = command "${toolbelt}/sfdx force:source:deploy -x ${DEPLOYDIR} --targetusername UAT"
 		    if (rc != 0) {
 			error 'Salesforce deploy and test run failed.'
@@ -81,7 +79,7 @@ stage('Install sgd-git-delta plugin') {
 
 
 		stage('Deploy to Salesforce') {
-		    rc = command "${toolbelt}sfdx force:source:deploy -x package/package.xml --postdestructivechanges destructiveChanges/destructiveChanges.xml"
+		    rc = command "${toolbelt}/sfdx force:source:deploy -x package/package.xml --postdestructivechanges destructiveChanges/destructiveChanges.xml --targetusername UAT"
 		//	rc = command "${toolbelt}/sfdx force:source:deploy -x ${DEPLOYDIR} --targetusername UAT"
 		    if (rc != 0) {
 			error 'Salesforce deploy and test run failed.'
