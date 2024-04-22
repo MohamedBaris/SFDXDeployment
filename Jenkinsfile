@@ -44,6 +44,7 @@ node {
 		// -------------------------------------------------------------------------
 
 		stage('Authorize to Salesforce') {
+			       rc = command "${toolbelt}/sfdx plugins"
 				rc = command "echo y | sfdx plugins:install sfdx-git-delta@v5.38.2"
 			rc = command "echo %PATH%"
 			rc = command "${toolbelt}/sfdx auth:jwt:grant --instanceurl ${SF_INSTANCE_URL} --clientid ${SF_CONSUMER_KEY} --jwtkeyfile ${server_key_file} --username ${SF_USERNAME} --setalias UAT"
