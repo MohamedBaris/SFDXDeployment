@@ -1,7 +1,5 @@
-#!groovy
-
 node {
-
+    // Define environment variables
     def SF_CONSUMER_KEY=env.SF_CONSUMER_KEY
     def SF_USERNAME=env.SF_USERNAME
     def SERVER_KEY_CREDENTIALS_ID=env.SERVER_KEY_CREDENTIALS_ID
@@ -9,103 +7,57 @@ node {
     def TEST_LEVEL='NoTestRun'
     def SF_INSTANCE_URL = env.SF_INSTANCE_URL ?: "https://login.salesforce.com"
 
-
+    // Define Salesforce CLI tool
     def toolbelt = tool 'toolbelt'
 
+    // Debug: Print out environment variables and toolbelt path
+    echo "SF_CONSUMER_KEY: ${SF_CONSUMER_KEY}"
+    echo "SF_USERNAME: ${SF_USERNAME}"
+    echo "SERVER_KEY_CREDENTIALS_ID: ${SERVER_KEY_CREDENTIALS_ID}"
+    echo "SF_INSTANCE_URL: ${SF_INSTANCE_URL}"
+    echo "toolbelt path: ${toolbelt}"
 
-    // -------------------------------------------------------------------------
-    // Check out code from source control.
-    // -------------------------------------------------------------------------
-
-	environment {
-
-    PATH = "C:\\WINDOWS\\SYSTEM32"
-
-}
-
-
-
-		
-    stage('checkout source') {
+    // Checkout source code
+    stage('Checkout source') {
         checkout scm
     }
 
+    // Run all stages with access to the Salesforce JWT key credentials
+    withEnv(["HOME=${env.WORKSPACE}"]) {  
+        withCredentials([file(credentialsId: SERVER_KEY_CREDENTIALS_ID, variable: 'server_key_file')]) {
 
-    // -------------------------------------------------------------------------
-    // Run all the enclosed stages with access to the Salesforce
-    // JWT key credentials.
-    // -------------------------------------------------------------------------
+            // Authenticate to Salesforce using the server key
+            stage('Authorize to Salesforce') {
+                // Install required plugin (if not already installed)
+                command "${toolbelt}/sfdx plugins:install sfdx-git-delta@v5.38.2"
+                // Debug: Check installed plugins
+                command "${toolbelt}/sfdx plugins"
+                // Authenticate to Salesforce
+                command "${toolbelt}/sfdx auth:jwt:grant --instanceurl ${SF_INSTANCE_URL} --clientid ${SF_CONSUMER_KEY} --jwtkeyfile ${server_key_file} --username ${SF_USERNAME} --setalias UAT"
+            }
 
- 	withEnv(["HOME=${env.WORKSPACE}"]) {	
-	
-	    withCredentials([file(credentialsId: SERVER_KEY_CREDENTIALS_ID, variable: 'server_key_file')]) {
-		// -------------------------------------------------------------------------
-		// Authenticate to Salesforce using the server key.
-		// -------------------------------------------------------------------------
+            // Download the source delta
+            stage('Download the difference') {
+                command "git fetch"
+                command "git fetch --unshallow"
+                // Execute source delta command
+                command "${toolbelt}/sfdx sgd:source:delta --to Feature1 --from main --output ."
+            }
 
-		stage('Authorize to Salesforce') {
-				rc = command "echo y | sfdx plugins:install sfdx-git-delta@v5.38.2"
-						  rc = command "${toolbelt}/sfdx plugins"
-
-			rc = command "echo %PATH%"
-			rc = command "${toolbelt}/sfdx auth:jwt:grant --instanceurl ${SF_INSTANCE_URL} --clientid ${SF_CONSUMER_KEY} --jwtkeyfile ${server_key_file} --username ${SF_USERNAME} --setalias UAT"
-		    if (rc != 0) {
-			error 'Salesforce org authorization failed.'
-		    }
-		}
-
-
-		// -------------------------------------------------------------------------
-		// Deploy metadata and execute unit tests.
-		// -------------------------------------------------------------------------
-
-		stage('Download the Main') {
-			  rc = command "git checkout Feature1"
-		    rc = command "git checkout main"
-		//	rc = command "${toolbelt}/sfdx force:source:deploy -x ${DEPLOYDIR} --targetusername UAT"
-		    if (rc != 0) {
-			error 'Salesforce deploy and test run failed.'
-		    }
-		}
-
-		
-		stage('Download the difference') {
-			rc = command "git fetch"
-			rc = command "git fetch --unshallow"
-		    rc = command "${toolbelt}/sfdx sgd:source:delta --to Feature1 --from main --output ."
-		//	rc = command "${toolbelt}/sfdx force:source:deploy -x ${DEPLOYDIR} --targetusername UAT"
-		    if (rc != 0) {
-			error 'Salesforce deploy and test run failed.'
-		    }
-		}
-
-
-		stage('Deploy to Salesforce') {
-		    rc = command "${toolbelt}/sfdx force:source:deploy -x package/package.xml --postdestructivechanges destructiveChanges/destructiveChanges.xml --targetusername UAT"
-		//	rc = command "${toolbelt}/sfdx force:source:deploy -x ${DEPLOYDIR} --targetusername UAT"
-		    if (rc != 0) {
-			error 'Salesforce deploy and test run failed.'
-		    }
-		}
-
-		// -------------------------------------------------------------------------
-		// Example shows how to run a check-only deploy.
-		// -------------------------------------------------------------------------
-
-		//stage('Check Only Deploy') {
-		//    rc = command "${toolbelt}/sfdx force:mdapi:deploy --checkonly --wait 10 --deploydir ${DEPLOYDIR} --targetusername UAT --testlevel ${TEST_LEVEL}"
-		//    if (rc != 0) {
-		//        error 'Salesforce deploy failed.'
-		//    }
-		//}
-	    }
-	}
+            // Deploy to Salesforce
+            stage('Deploy to Salesforce') {
+                // Deploy source code
+                command "${toolbelt}/sfdx force:source:deploy -x package/package.xml --postdestructivechanges destructiveChanges/destructiveChanges.xml --targetusername UAT"
+            }
+        }
+    }
 }
 
+// Function to execute commands based on OS
 def command(script) {
     if (isUnix()) {
-        return sh(returnStatus: true, script: script);
+        return sh(script);
     } else {
-		return bat(returnStatus: true, script: script);
+        return bat(script);
     }
 }
